@@ -35,29 +35,32 @@ FROM reservations
 GROUP BY status, num_guests;
 -- Ожидается: список статусов бронирований и среднее количество гостей для каждого статуса.
 
--- 4. Найти последние бронирования для каждого пользователя
--- Запрос использует оконные функции
+-- 4. Для каждого ресторана определить количество бронирований в статусе 'pending', 'confirmed' и 'canceled'.
+-- Запрос использует GROUP BY и HAVING
 SELECT 
-    u.user_id,
-    u.username,
-    r.reservation_date,
-    ROW_NUMBER() OVER (PARTITION BY u.user_id ORDER BY r.reservation_date DESC) AS row_num
-FROM users u
-JOIN user_reservation ur ON u.user_id = ur.user_id
-JOIN reservations r ON ur.reservation_id = r.reservation_id
-WHERE ROW_NUMBER() OVER (PARTITION BY u.user_id ORDER BY r.reservation_date DESC) = 1;
--- Ожидается: один последний заказ для каждого пользователя.
+    rest.restaurant_id,
+    rest.name AS restaurant_name,
+    COUNT(CASE WHEN r.status = 'pending' THEN 1 ELSE NULL END) AS pending_reservations,
+    COUNT(CASE WHEN r.status = 'confirmed' THEN 1 ELSE NULL END) AS confirmed_reservations,
+    COUNT(CASE WHEN r.status = 'canceled' THEN 1 ELSE NULL END) AS canceled_reservations
+FROM restaurants rest
+JOIN restaurant_table rt ON rest.restaurant_id = rt.restaurant_id
+JOIN table_reservation tr ON rt.table_id = tr.table_id
+JOIN reservations r ON tr.reservation_id = r.reservation_id
+GROUP BY rest.restaurant_id, rest.name
+ORDER BY pending_reservations DESC;
+-- Ожидается: количество каждого статуса бронирования для каждого ресторана.
 
 -- 5. Найти рестораны с общим количеством мест по столикам и доступностью
 -- Запрос использует GROUP BY и HAVING
 SELECT 
-    r.restaurant_id,
-    rest.name AS restaurant_name,
-    SUM(t.seats) AS total_seats,
-    SUM(CASE WHEN t.is_available THEN t.seats ELSE 0 END) AS available_seats
-FROM restaurant_table rt
-JOIN restaurants rest ON rt.restaurant_id = rest.restaurant_id
-JOIN tables t ON rt.table_id = t.table_id
-GROUP BY r.restaurant_id, rest.name
-HAVING SUM(t.seats) > 50;
+     rest.restaurant_id,
+     rest.name AS restaurant_name,
+     SUM(t.seats) AS total_seats,
+     SUM(CASE WHEN t.is_available THEN t.seats ELSE 0 END) AS available_seats
+ FROM restaurant_table rt
+ JOIN restaurants rest ON rt.restaurant_id = rest.restaurant_id
+ JOIN tables t ON rt.table_id = t.table_id
+ GROUP BY rest.restaurant_id, rest.name
+ HAVING SUM(t.seats) > 50;
 -- Ожидается: список ресторанов с общим количеством мест и доступных мест, где общая вместимость более 50.
